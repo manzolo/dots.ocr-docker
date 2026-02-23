@@ -85,6 +85,24 @@ curl -s http://localhost:8000/v1/chat/completions \
   }"
 ```
 
+### PDF Processing
+
+Use `pdf-ocr.sh` to extract text from PDF documents (requires `poppler-utils`):
+
+```bash
+# OCR all pages of a PDF
+./pdf-ocr.sh document.pdf
+
+# OCR a single page
+./pdf-ocr.sh document.pdf --page 2
+
+# Save output to a file
+./pdf-ocr.sh document.pdf --output result.txt
+
+# Works with images too
+./pdf-ocr.sh photo.png
+```
+
 ## Hardware Profiles
 
 | Profile | GPU VRAM | Quantization | Model Length | Example GPUs |
