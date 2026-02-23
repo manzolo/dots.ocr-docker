@@ -26,13 +26,18 @@ cp examples/env.gpu-12gb .env   # GPU 12GB VRAM (bitsandbytes)
 cp examples/env.cpu .env        # CPU-only (slow)
 ```
 
-3. Start the service:
+3. **CPU-only**: build the CPU image first (one-time, ~15-30 min):
+```bash
+./dots-ocr-manager.sh build-cpu
+```
+
+4. Start the service:
 ```bash
 ./dots-ocr-manager.sh up          # GPU mode
 ./dots-ocr-manager.sh up --cpu    # CPU-only mode
 ```
 
-4. Wait for the model to load, then test:
+5. Wait for the model to load, then test:
 ```bash
 ./dots-ocr-manager.sh test
 ```
@@ -50,6 +55,7 @@ cp examples/env.cpu .env        # CPU-only (slow)
 ./dots-ocr-manager.sh test         # Test API with sample image
 ./dots-ocr-manager.sh pull         # Pull latest Docker image
 ./dots-ocr-manager.sh update       # Pull + restart
+./dots-ocr-manager.sh build-cpu    # Build CPU image from vLLM source
 ./dots-ocr-manager.sh clean        # Remove everything including volumes
 ./dots-ocr-manager.sh help         # Show help
 ```

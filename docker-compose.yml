@@ -1,6 +1,6 @@
 services:
   dots-ocr:
-    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.11.0}
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.11.1}
 
     container_name: dots-ocr-service
 
@@ -67,8 +67,9 @@ services:
     shm_size: '8gb'
 
   # CPU-only version (start with: docker compose --profile cpu up -d)
+  # Build the image first: ./dots-ocr-manager.sh build-cpu
   dots-ocr-cpu:
-    image: ${VLLM_CPU_IMAGE:-public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo:latest}
+    image: ${VLLM_CPU_IMAGE:-dots-ocr-cpu:v0.11.1}
 
     container_name: dots-ocr-cpu-service
     profiles:

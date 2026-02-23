@@ -11,6 +11,10 @@ cd "$SCRIPT_DIR"
 # Project name
 COMPOSE_PROJECT="dots-ocr"
 
+# vLLM version and CPU image settings
+VLLM_VERSION="${VLLM_VERSION:-v0.11.1}"
+VLLM_CPU_IMAGE_NAME="dots-ocr-cpu:${VLLM_VERSION}"
+
 # Detected compose command
 COMPOSE_CMD=""
 
@@ -78,17 +82,18 @@ show_help() {
     echo "Usage: ./dots-ocr-manager.sh <command> [options]"
     echo ""
     echo "Commands:"
-    echo "  up [--cpu] - Start dots.ocr (GPU default, --cpu for CPU-only)"
-    echo "  down       - Stop dots.ocr"
-    echo "  restart    - Restart dots.ocr"
-    echo "  logs       - Show real-time logs"
-    echo "  status     - Show container status and GPU usage"
-    echo "  pull       - Update Docker image"
-    echo "  exec       - Open a shell in the container"
-    echo "  update     - Update everything (pull + down + up)"
-    echo "  clean      - Full cleanup (down + remove volumes)"
-    echo "  test       - Test the API with a sample image"
-    echo "  help       - Show this help"
+    echo "  up [--cpu]  - Start dots.ocr (GPU default, --cpu for CPU-only)"
+    echo "  down        - Stop dots.ocr"
+    echo "  restart     - Restart dots.ocr"
+    echo "  logs        - Show real-time logs"
+    echo "  status      - Show container status and GPU usage"
+    echo "  pull        - Update Docker image"
+    echo "  exec        - Open a shell in the container"
+    echo "  update      - Update everything (pull + down + up)"
+    echo "  clean       - Full cleanup (down + remove volumes)"
+    echo "  test        - Test the API with a sample image"
+    echo "  build-cpu   - Build the CPU Docker image from vLLM source"
+    echo "  help        - Show this help"
     echo ""
     echo "Hardware profiles:"
     echo "  cp examples/env.gpu-24gb .env   # GPU >= 24GB VRAM (full model)"
@@ -104,6 +109,40 @@ show_help() {
     echo "NOTE: This script can be run from any directory."
     echo "      Copy .env.example to .env and customize the variables."
     echo "=========================================="
+}
+
+# Build CPU Docker image from official vLLM source
+cmd_build_cpu() {
+    print_message "blue" "Building CPU image from vLLM ${VLLM_VERSION} source..."
+    print_message "yellow" "This may take 15-30 minutes on the first build."
+    echo ""
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap "rm -rf '$tmp_dir'" EXIT
+
+    print_message "yellow" "Cloning vLLM ${VLLM_VERSION}..."
+    if ! git clone --depth 1 --branch "${VLLM_VERSION}" \
+        https://github.com/vllm-project/vllm.git "$tmp_dir/vllm"; then
+        print_message "red" "Error cloning vLLM repository"
+        exit 1
+    fi
+
+    print_message "yellow" "Building Docker image (this will take a while)..."
+    if docker build \
+        -f "$tmp_dir/vllm/docker/Dockerfile.cpu" \
+        --build-arg VLLM_CPU_DISABLE_AVX512=true \
+        --target vllm-openai \
+        --tag "${VLLM_CPU_IMAGE_NAME}" \
+        "$tmp_dir/vllm"; then
+        echo ""
+        print_message "green" "CPU image built successfully: ${VLLM_CPU_IMAGE_NAME}"
+        print_message "yellow" "Start with: ./dots-ocr-manager.sh up --cpu"
+    else
+        echo ""
+        print_message "red" "Error building CPU image"
+        exit 1
+    fi
 }
 
 # Start dots.ocr
@@ -446,6 +485,9 @@ main() {
             ;;
         test)
             cmd_test
+            ;;
+        build-cpu)
+            cmd_build_cpu
             ;;
         help|--help|-h)
             show_help
