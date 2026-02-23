@@ -1,13 +1,13 @@
 services:
   dots-ocr:
-    image: vllm/vllm-openai:latest
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.11.0}
 
     container_name: dots-ocr-service
 
     ports:
       - "${API_PORT:-8000}:8000"
 
-    # Supporto GPU NVIDIA obbligatorio
+    # Supporto GPU NVIDIA
     deploy:
       resources:
         reservations:
@@ -31,23 +31,27 @@ services:
       - VLLM_HTTP_TIMEOUT=300
       # Token di autenticazione (opzionale)
       - VLLM_TOKEN=${VLLM_TOKEN:-your-secret-token-here}
-      # Token HuggingFace per download modelli (opzionale, dots.ocr-1.5 e' pubblico)
+      # Token HuggingFace per download modelli (opzionale)
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+      # Memoria CUDA: evita frammentazione
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-    # Comandini vLLM specifici per dots.ocr
+    # Comando vLLM per dots.ocr
     command: >
-      --model rednote-hilab/dots.ocr-1.5
+      --model ${OCR_MODEL:-rednote-hilab/dots.ocr}
       --dtype auto
+      --quantization ${QUANTIZATION:-bitsandbytes}
+      --load-format ${LOAD_FORMAT:-bitsandbytes}
       --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.90}
-      --max-model-len ${MAX_MODEL_LEN:-8192}
+      --max-model-len ${MAX_MODEL_LEN:-4096}
       --max-num-seqs ${MAX_NUM_SEQS:-4}
-      --max-num-batched-tokens 8192
+      --max-num-batched-tokens 4096
+      --enforce-eager
       --trust-remote-code
       --served-model-name dots-ocr
+      --chat-template-content-format string
       --disable-log-requests
-      --enable-prefix-caching
-      --enable-chunked-prefill
-      --limit-mm-per-prompt image=${MAX_IMAGES_PER_PROMPT:-6}
+      --limit-mm-per-prompt '{"image": ${MAX_IMAGES_PER_PROMPT:-6}}'
 
     # Healthcheck
     healthcheck:
@@ -55,22 +59,56 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
     restart: unless-stopped
 
     # Shared memory aumentata per workload GPU
     shm_size: '8gb'
 
-    # Opzionale: network_mode: host per migliore performance GPU
-    # network_mode: host
+  # Versione CPU-only (avviare con: docker compose --profile cpu up -d)
+  dots-ocr-cpu:
+    image: ${VLLM_CPU_IMAGE:-public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo:latest}
 
-    # Opzionale: privileged per meglio gestire device
-    # privileged: true
+    container_name: dots-ocr-cpu-service
+    profiles:
+      - cpu
 
-    # Opzionale: extra_hosts per risolvere nomi DNS
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
+      - ocr-logs:/var/log/vllm
+
+    environment:
+      - HF_HUB_OFFLINE=0
+      - VLLM_LOGGING_LEVEL=INFO
+      - VLLM_HTTP_TIMEOUT=600
+      - VLLM_TOKEN=${VLLM_TOKEN:-your-secret-token-here}
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+      - VLLM_TARGET_DEVICE=cpu
+
+    command: >
+      --model ${OCR_MODEL:-rednote-hilab/dots.ocr}
+      --dtype float32
+      --max-model-len ${MAX_MODEL_LEN:-4096}
+      --max-num-seqs 1
+      --trust-remote-code
+      --served-model-name dots-ocr
+      --chat-template-content-format string
+      --disable-log-requests
+      --limit-mm-per-prompt '{"image": ${MAX_IMAGES_PER_PROMPT:-6}}'
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 300s
+
+    restart: unless-stopped
+    shm_size: '8gb'
 
 volumes:
   huggingface-cache:
