@@ -7,7 +7,7 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
 
-    # Supporto GPU NVIDIA
+    # NVIDIA GPU support
     deploy:
       resources:
         reservations:
@@ -17,41 +17,41 @@ services:
               capabilities: [gpu]
 
     volumes:
-      # Cache HuggingFace persistente
+      # Persistent HuggingFace cache
       - huggingface-cache:/root/.cache/huggingface
-      # Montaggio facoltativo per persistere i logs
+      # Optional log persistence
       - ocr-logs:/var/log/vllm
 
     environment:
-      # Disabilita cache locale per forza download HuggingFace
+      # Allow HuggingFace downloads
       - HF_HUB_OFFLINE=0
-      # Livello logging di vLLM
+      # vLLM logging level
       - VLLM_LOGGING_LEVEL=INFO
-      # Timeout per connessioni
+      # Connection timeout
       - VLLM_HTTP_TIMEOUT=300
-      # Token di autenticazione (opzionale)
+      # API authentication token (optional)
       - VLLM_TOKEN=${VLLM_TOKEN:-your-secret-token-here}
-      # Token HuggingFace per download modelli (opzionale)
+      # HuggingFace token for gated models (optional)
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
-      # Memoria CUDA: evita frammentazione
+      # CUDA memory: avoid fragmentation
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-    # Comando vLLM per dots.ocr
+    # vLLM command for dots.ocr
     command: >
       --model ${OCR_MODEL:-rednote-hilab/dots.ocr}
       --dtype auto
-      --quantization ${QUANTIZATION:-bitsandbytes}
-      --load-format ${LOAD_FORMAT:-bitsandbytes}
       --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.90}
-      --max-model-len ${MAX_MODEL_LEN:-4096}
+      --max-model-len ${MAX_MODEL_LEN:-8192}
       --max-num-seqs ${MAX_NUM_SEQS:-4}
-      --max-num-batched-tokens 4096
-      --enforce-eager
+      --max-num-batched-tokens ${MAX_NUM_BATCHED_TOKENS:-8192}
+      --enable-prefix-caching
+      --enable-chunked-prefill
       --trust-remote-code
       --served-model-name dots-ocr
       --chat-template-content-format string
       --disable-log-requests
       --limit-mm-per-prompt '{"image": ${MAX_IMAGES_PER_PROMPT:-6}}'
+      ${VLLM_EXTRA_ARGS:-}
 
     # Healthcheck
     healthcheck:
@@ -63,10 +63,10 @@ services:
 
     restart: unless-stopped
 
-    # Shared memory aumentata per workload GPU
+    # Increased shared memory for GPU workloads
     shm_size: '8gb'
 
-  # Versione CPU-only (avviare con: docker compose --profile cpu up -d)
+  # CPU-only version (start with: docker compose --profile cpu up -d)
   dots-ocr-cpu:
     image: ${VLLM_CPU_IMAGE:-public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo:latest}
 

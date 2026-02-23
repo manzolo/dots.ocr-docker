@@ -1,0 +1,81 @@
+name: Docker Build & Test (CPU)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy CPU env
+        run: cp examples/env.cpu .env
+
+      - name: Start vLLM CPU service
+        run: docker compose --profile cpu up -d dots-ocr-cpu
+
+      - name: Wait for service to be healthy
+        run: |
+          echo "Waiting for vLLM CPU service to be healthy..."
+          for i in $(seq 1 60); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' dots-ocr-cpu-service 2>/dev/null || echo "not_found")
+            echo "  Attempt $i/60: $STATUS"
+            if [ "$STATUS" = "healthy" ]; then
+              echo "Service is healthy!"
+              exit 0
+            fi
+            if [ "$STATUS" = "unhealthy" ]; then
+              echo "Service is unhealthy, showing logs:"
+              docker compose --profile cpu logs dots-ocr-cpu
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "Timeout waiting for service to be healthy"
+          docker compose --profile cpu logs dots-ocr-cpu
+          exit 1
+
+      - name: Test OCR API with sample image
+        run: |
+          IMAGE_B64=$(base64 -w 0 test/sample.png)
+          TOKEN=$(grep -E '^VLLM_TOKEN=' .env | cut -d'=' -f2-)
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 120 \
+            -X POST http://localhost:8000/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -d "{
+              \"model\": \"dots-ocr\",
+              \"messages\": [{
+                \"role\": \"user\",
+                \"content\": [
+                  {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,${IMAGE_B64}\"}},
+                  {\"type\": \"text\", \"text\": \"Extract all text from this document.\"}
+                ]
+              }],
+              \"max_tokens\": 2048
+            }")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Test failed!"
+            exit 1
+          fi
+
+          echo "Test passed!"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose --profile cpu down -v

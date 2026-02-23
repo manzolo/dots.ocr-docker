@@ -1,38 +1,38 @@
 #!/bin/bash
 
 # dots-ocr-manager.sh
-# Script di gestione per dots.ocr con vLLM
-# Versione: 1.2.0
+# Management script for dots.ocr with vLLM
+# Version: 2.0.0
 
-# Cambia alla directory dello script per trovare docker-compose.yml
+# Change to script directory to find docker-compose.yml
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Nome del progetto
+# Project name
 COMPOSE_PROJECT="dots-ocr"
 
-# Variabile per il comando compose rilevato
+# Detected compose command
 COMPOSE_CMD=""
 
-# Funzione per verificare se docker compose e' installato e salvare il comando
+# Check if docker compose is installed and store the command
 check_docker_compose() {
     if docker compose version >/dev/null 2>&1; then
         COMPOSE_CMD="docker compose"
     elif docker-compose --version >/dev/null 2>&1; then
         COMPOSE_CMD="docker-compose"
     else
-        echo "Errore: docker compose non e' installato"
-        echo "Per favore installa Docker e Docker Compose v2.x"
+        echo "Error: docker compose is not installed"
+        echo "Please install Docker and Docker Compose v2.x"
         exit 1
     fi
 }
 
-# Esegue il comando compose con il progetto configurato
+# Run compose command with configured project name
 run_compose() {
     $COMPOSE_CMD -p "$COMPOSE_PROJECT" "$@"
 }
 
-# Rileva il nome del container attivo (GPU o CPU)
+# Detect the active container name (GPU or CPU)
 get_container_name() {
     if docker inspect dots-ocr-service >/dev/null 2>&1; then
         echo "dots-ocr-service"
@@ -43,7 +43,7 @@ get_container_name() {
     fi
 }
 
-# Rileva il nome del servizio compose attivo
+# Detect the active compose service name
 get_service_name() {
     local container
     container=$(get_container_name)
@@ -54,7 +54,7 @@ get_service_name() {
     fi
 }
 
-# Funzione per stampare messaggi colorati
+# Print colored messages
 print_message() {
     local color=$1
     local message=$2
@@ -69,150 +69,155 @@ print_message() {
     esac
 }
 
-# Funzione per mostrare aiuto
+# Show help
 show_help() {
     echo "=========================================="
-    echo "  dots-ocr-manager.sh - Script di gestione"
+    echo "  dots-ocr-manager.sh - Management Script"
     echo "=========================================="
     echo ""
-    echo "Uso: ./dots-ocr-manager.sh <comando> [opzioni]"
+    echo "Usage: ./dots-ocr-manager.sh <command> [options]"
     echo ""
-    echo "Comandi disponibili:"
-    echo "  up [--cpu] - Avvia dots.ocr (GPU default, --cpu per CPU-only)"
-    echo "  down      - Ferma dots.ocr"
-    echo "  restart   - Riavvia dots.ocr"
-    echo "  logs      - Visualizza i log in tempo reale"
-    echo "  status    - Mostra stato del container e utilizzo GPU"
-    echo "  pull      - Aggiorna l'immagine Docker"
-    echo "  exec      - Entra nella shell del container"
-    echo "  update    - Aggiorna tutto (pull + down + up)"
-    echo "  clean     - Pulisce completamente (down + rm volumes)"
-    echo "  test      - Testa l'API con un PDF di esempio"
-    echo "  help      - Mostra questo aiuto"
+    echo "Commands:"
+    echo "  up [--cpu] - Start dots.ocr (GPU default, --cpu for CPU-only)"
+    echo "  down       - Stop dots.ocr"
+    echo "  restart    - Restart dots.ocr"
+    echo "  logs       - Show real-time logs"
+    echo "  status     - Show container status and GPU usage"
+    echo "  pull       - Update Docker image"
+    echo "  exec       - Open a shell in the container"
+    echo "  update     - Update everything (pull + down + up)"
+    echo "  clean      - Full cleanup (down + remove volumes)"
+    echo "  test       - Test the API with a sample image"
+    echo "  help       - Show this help"
     echo ""
-    echo "Esempi:"
-    echo "  ./dots-ocr-manager.sh up          # Avvia con GPU"
-    echo "  ./dots-ocr-manager.sh up --cpu    # Avvia senza GPU (CPU-only)"
+    echo "Hardware profiles:"
+    echo "  cp examples/env.gpu-24gb .env   # GPU >= 24GB VRAM (full model)"
+    echo "  cp examples/env.gpu-12gb .env   # GPU 12GB VRAM (bitsandbytes)"
+    echo "  cp examples/env.cpu .env        # CPU-only (slow, no GPU)"
+    echo ""
+    echo "Examples:"
+    echo "  ./dots-ocr-manager.sh up         # Start with GPU"
+    echo "  ./dots-ocr-manager.sh up --cpu   # Start without GPU (CPU-only)"
     echo "  ./dots-ocr-manager.sh logs"
     echo "  ./dots-ocr-manager.sh status"
     echo ""
-    echo "NOTA: Lo script puo' essere lanciato da qualsiasi directory."
-    echo "      Copia .env.example in .env e personalizza le variabili."
+    echo "NOTE: This script can be run from any directory."
+    echo "      Copy .env.example to .env and customize the variables."
     echo "=========================================="
 }
 
-# Funzione per avviare dots.ocr
+# Start dots.ocr
 cmd_up() {
     local use_cpu=false
     if [ "$1" = "--cpu" ]; then
         use_cpu=true
     fi
 
-    # Controlla se c'e' gia' un container attivo
+    # Check if a container is already running
     local containers
     containers=$(run_compose ps -q 2>/dev/null)
     if [ -n "$containers" ]; then
-        print_message "yellow" "dots.ocr e' gia' in esecuzione"
+        print_message "yellow" "dots.ocr is already running"
         run_compose ps
         return
     fi
 
     if [ "$use_cpu" = true ]; then
-        print_message "blue" "Avvio dots.ocr in modalita' CPU-only..."
-        print_message "yellow" "ATTENZIONE: la modalita' CPU e' molto piu' lenta della GPU"
+        print_message "blue" "Starting dots.ocr in CPU-only mode..."
+        print_message "yellow" "WARNING: CPU mode is much slower than GPU"
         run_compose --profile cpu up -d dots-ocr-cpu
     else
-        print_message "blue" "Avvio dots.ocr con GPU..."
+        print_message "blue" "Starting dots.ocr with GPU..."
         run_compose up -d dots-ocr
     fi
 
     echo ""
-    print_message "green" "dots.ocr e' stato avviato!"
+    print_message "green" "dots.ocr has been started!"
     echo ""
-    print_message "yellow" "Accesso API OpenAI-compatible:"
+    print_message "yellow" "OpenAI-compatible API access:"
     echo "   Base URL: http://localhost:8000/v1"
     echo "   Model name: dots-ocr"
     echo ""
-    print_message "yellow" "Il modello si sta caricando, controlla i log:"
+    print_message "yellow" "The model is loading, check the logs:"
     echo "   ./dots-ocr-manager.sh logs"
 }
 
-# Funzione per fermare dots.ocr
+# Stop dots.ocr
 cmd_down() {
-    print_message "blue" "Fermata dots.ocr..."
+    print_message "blue" "Stopping dots.ocr..."
 
-    # Ferma sia GPU che CPU profile
+    # Stop both GPU and CPU profiles
     run_compose --profile cpu down
     echo ""
-    print_message "green" "dots.ocr e' stato fermato"
+    print_message "green" "dots.ocr has been stopped"
 }
 
-# Funzione per riavviare dots.ocr
+# Restart dots.ocr
 cmd_restart() {
-    print_message "blue" "Riavvio dots.ocr..."
+    print_message "blue" "Restarting dots.ocr..."
 
     local service
     service=$(get_service_name)
 
     if run_compose restart "$service"; then
-        print_message "green" "dots.ocr e' stato riavviato"
+        print_message "green" "dots.ocr has been restarted"
     else
-        print_message "red" "Errore durante il riavvio"
+        print_message "red" "Error during restart"
         exit 1
     fi
 }
 
-# Funzione per visualizzare i log
+# Show logs
 cmd_logs() {
     local service
     service=$(get_service_name)
 
-    print_message "blue" "Visualizzazione log di dots.ocr (Ctrl+C per uscire)..."
+    print_message "blue" "Showing dots.ocr logs (Ctrl+C to exit)..."
     run_compose logs -f "$service"
 }
 
-# Funzione per aggiornare l'immagine
+# Pull latest image
 cmd_pull() {
-    print_message "blue" "Pull dell'ultima immagine Docker..."
+    print_message "blue" "Pulling latest Docker image..."
 
     if run_compose pull; then
-        print_message "green" "Immagine aggiornata con successo"
-        print_message "yellow" "Esegui './dots-ocr-manager.sh update' per applicare le modifiche"
+        print_message "green" "Image updated successfully"
+        print_message "yellow" "Run './dots-ocr-manager.sh update' to apply changes"
     else
-        print_message "red" "Errore durante il pull"
+        print_message "red" "Error during pull"
         exit 1
     fi
 }
 
-# Funzione per mostrare lo stato
+# Show status
 cmd_status() {
-    print_message "blue" "Status di dots.ocr:"
+    print_message "blue" "dots.ocr status:"
     echo ""
 
-    # Stato container
+    # Container status
     local container
     container=$(get_container_name)
 
     if [ -n "$container" ]; then
         run_compose ps
     else
-        print_message "yellow" "Nessun container in esecuzione"
+        print_message "yellow" "No container running"
     fi
 
     echo ""
 
-    # Controlli GPU (direttamente sull'host)
+    # GPU checks (on the host)
     if command -v nvidia-smi >/dev/null 2>&1; then
         nvidia-smi
     else
-        print_message "yellow" "nvidia-smi non disponibile sull'host"
+        print_message "yellow" "nvidia-smi not available on the host"
     fi
 
     echo ""
     print_message "yellow" "Healthcheck:"
 
     if [ -z "$container" ]; then
-        print_message "yellow" "   Healthcheck non disponibile (container non attivo)"
+        print_message "yellow" "   Healthcheck not available (container not running)"
         return
     fi
 
@@ -225,95 +230,95 @@ cmd_status() {
             *) print_message "yellow" "   Status: ${HEALTH_STATUS}" ;;
         esac
     else
-        print_message "yellow" "   Healthcheck non disponibile"
+        print_message "yellow" "   Healthcheck not available"
     fi
 }
 
-# Funzione per entrare nel container
+# Open shell in container
 cmd_exec() {
     local service
     service=$(get_service_name)
 
-    print_message "blue" "Accesso alla shell del container..."
+    print_message "blue" "Opening shell in the container..."
 
     if run_compose exec "$service" /bin/bash; then
         echo ""
     else
-        print_message "red" "Errore durante l'esecuzione"
+        print_message "red" "Error during exec"
         exit 1
     fi
 }
 
-# Funzione per aggiornare tutto
+# Update everything
 cmd_update() {
-    print_message "blue" "Aggiornamento dots.ocr..."
+    print_message "blue" "Updating dots.ocr..."
     echo ""
 
-    print_message "yellow" "1. Pull dell'ultima immagine..."
+    print_message "yellow" "1. Pulling latest image..."
     if ! run_compose pull; then
-        print_message "red" "Errore durante il pull"
+        print_message "red" "Error during pull"
         exit 1
     fi
 
     echo ""
-    print_message "yellow" "2. Fermata del servizio..."
+    print_message "yellow" "2. Stopping service..."
     if ! run_compose --profile cpu down; then
-        print_message "red" "Errore durante la fermata"
+        print_message "red" "Error during stop"
         exit 1
     fi
 
     echo ""
-    print_message "yellow" "3. Avvio del servizio..."
+    print_message "yellow" "3. Starting service..."
     if ! run_compose up -d; then
-        print_message "red" "Errore durante l'avvio"
+        print_message "red" "Error during start"
         exit 1
     fi
 
     echo ""
-    print_message "green" "dots.ocr e' stato aggiornato con successo!"
-    print_message "yellow" "Per verificare lo stato:"
+    print_message "green" "dots.ocr has been updated successfully!"
+    print_message "yellow" "To check status:"
     echo "   ./dots-ocr-manager.sh status"
 }
 
-# Funzione per pulire tutto
+# Full cleanup
 cmd_clean() {
-    print_message "blue" "Pulizia completa..."
+    print_message "blue" "Full cleanup..."
 
-    read -p "Sei sicuro di voler rimuovere completamente dots.ocr (inclusi i volumi)? (s/N) " -n 1 -r
+    read -p "Are you sure you want to completely remove dots.ocr (including volumes)? (y/N) " -n 1 -r
     echo
-    if [[ $REPLY =~ ^[Ss]$ ]]; then
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
         run_compose --profile cpu down -v
-        print_message "green" "Pulizia completata"
+        print_message "green" "Cleanup completed"
     else
-        print_message "yellow" "Pulizia annullata"
+        print_message "yellow" "Cleanup cancelled"
     fi
 }
 
-# Funzione per testare l'API con un PDF di esempio
+# Test the API with a sample image
 cmd_test() {
-    print_message "blue" "Test dell'API dots.ocr..."
+    print_message "blue" "Testing dots.ocr API..."
     echo ""
 
-    # Rileva il container attivo
+    # Detect active container
     local container
     container=$(get_container_name)
 
     if [ -z "$container" ]; then
-        print_message "red" "Nessun container attivo. Avvialo con: ./dots-ocr-manager.sh up"
+        print_message "red" "No active container. Start it with: ./dots-ocr-manager.sh up"
         exit 1
     fi
 
-    # Verifica health
+    # Check health
     if docker inspect --format='{{.State.Health.Status}}' "$container" >/dev/null 2>&1; then
         HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$container")
         if [ "$HEALTH_STATUS" != "healthy" ]; then
-            print_message "yellow" "Il servizio non e' ancora healthy (status: $HEALTH_STATUS)"
-            print_message "yellow" "Attendi che il modello sia completamente caricato e riprova."
+            print_message "yellow" "Service is not yet healthy (status: $HEALTH_STATUS)"
+            print_message "yellow" "Wait for the model to fully load and try again."
             exit 1
         fi
     fi
 
-    # Verifica che il file di test esista (PNG preferito, PDF come fallback)
+    # Check that the test file exists (PNG preferred, PDF as fallback)
     local test_file="$SCRIPT_DIR/test/sample.png"
     local mime_type="image/png"
     if [ ! -f "$test_file" ]; then
@@ -321,11 +326,11 @@ cmd_test() {
         mime_type="application/pdf"
     fi
     if [ ! -f "$test_file" ]; then
-        print_message "red" "File di test non trovato in test/"
+        print_message "red" "Test file not found in test/"
         exit 1
     fi
 
-    # Leggi il token dal .env o usa il default
+    # Read token from .env or use default
     local api_token="${VLLM_TOKEN:-your-secret-token-here}"
     if [ -f "$SCRIPT_DIR/.env" ]; then
         local env_token
@@ -344,12 +349,12 @@ cmd_test() {
         fi
     fi
 
-    # Codifica il file in base64
-    print_message "yellow" "Invio immagine di test all'API..."
+    # Encode file to base64
+    print_message "yellow" "Sending test image to the API..."
     local file_base64
     file_base64=$(base64 -w 0 "$test_file")
 
-    # Invia la richiesta all'API OpenAI-compatible
+    # Send request to OpenAI-compatible API
     local response
     response=$(curl -s -w "\n%{http_code}" --max-time 120 \
         -X POST "http://localhost:${api_port}/v1/chat/completions" \
@@ -377,7 +382,7 @@ cmd_test() {
             \"max_tokens\": 2048
         }")
 
-    # Separa body e HTTP status code
+    # Separate body and HTTP status code
     local http_code
     http_code=$(echo "$response" | tail -1)
     local body
@@ -385,32 +390,32 @@ cmd_test() {
 
     echo ""
     if [ "$http_code" = "200" ]; then
-        print_message "green" "Test completato con successo! (HTTP $http_code)"
+        print_message "green" "Test completed successfully! (HTTP $http_code)"
         echo ""
-        print_message "yellow" "Testo estratto dal modello OCR:"
+        print_message "yellow" "Text extracted by OCR model:"
         echo "---"
         echo "$body" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['choices'][0]['message']['content'])" 2>/dev/null || echo "$body"
         echo "---"
     else
-        print_message "red" "Test fallito! (HTTP $http_code)"
+        print_message "red" "Test failed! (HTTP $http_code)"
         echo ""
         echo "$body"
         exit 1
     fi
 }
 
-# Funzione principale
+# Main function
 main() {
-    # Verifica argomenti
+    # Check arguments
     if [ $# -eq 0 ]; then
         show_help
         exit 0
     fi
 
-    # Verifica docker compose
+    # Check docker compose
     check_docker_compose
 
-    # Esegui comando
+    # Execute command
     case "$1" in
         up)
             cmd_up "$2"
@@ -446,7 +451,7 @@ main() {
             show_help
             ;;
         *)
-            print_message "red" "Comando sconosciuto: $1"
+            print_message "red" "Unknown command: $1"
             echo ""
             show_help
             exit 1
@@ -454,5 +459,5 @@ main() {
     esac
 }
 
-# Esecuzione
+# Run
 main "$@"
