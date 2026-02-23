@@ -1,0 +1,79 @@
+services:
+  dots-ocr:
+    image: vllm/vllm-openai:latest
+
+    container_name: dots-ocr-service
+
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+    # Supporto GPU NVIDIA obbligatorio
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    volumes:
+      # Cache HuggingFace persistente
+      - huggingface-cache:/root/.cache/huggingface
+      # Montaggio facoltativo per persistere i logs
+      - ocr-logs:/var/log/vllm
+
+    environment:
+      # Disabilita cache locale per forza download HuggingFace
+      - HF_HUB_OFFLINE=0
+      # Livello logging di vLLM
+      - VLLM_LOGGING_LEVEL=INFO
+      # Timeout per connessioni
+      - VLLM_HTTP_TIMEOUT=300
+      # Token di autenticazione (opzionale)
+      - VLLM_TOKEN=${VLLM_TOKEN:-your-secret-token-here}
+      # Token HuggingFace per download modelli (opzionale, dots.ocr-1.5 e' pubblico)
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+
+    # Comandini vLLM specifici per dots.ocr
+    command: >
+      --model rednote-hilab/dots.ocr-1.5
+      --dtype auto
+      --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.90}
+      --max-model-len ${MAX_MODEL_LEN:-8192}
+      --max-num-seqs ${MAX_NUM_SEQS:-4}
+      --max-num-batched-tokens 8192
+      --trust-remote-code
+      --served-model-name dots-ocr
+      --disable-log-requests
+      --enable-prefix-caching
+      --enable-chunked-prefill
+      --limit-mm-per-prompt image=${MAX_IMAGES_PER_PROMPT:-6}
+
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    restart: unless-stopped
+
+    # Shared memory aumentata per workload GPU
+    shm_size: '8gb'
+
+    # Opzionale: network_mode: host per migliore performance GPU
+    # network_mode: host
+
+    # Opzionale: privileged per meglio gestire device
+    # privileged: true
+
+    # Opzionale: extra_hosts per risolvere nomi DNS
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+
+volumes:
+  huggingface-cache:
+    driver: local
+  ocr-logs:
+    driver: local
