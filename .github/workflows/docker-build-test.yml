@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -59,7 +59,7 @@ jobs:
           IMAGE_B64=$(base64 -w 0 test/sample.png)
           TOKEN=$(grep -E '^VLLM_TOKEN=' .env | cut -d'=' -f2-)
 
-          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 120 \
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 600 \
             -X POST http://localhost:8000/v1/chat/completions \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${TOKEN}" \

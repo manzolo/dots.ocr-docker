@@ -6,6 +6,8 @@
 
 A Docker setup for running [dots.ocr](https://github.com/rednote-hilab/dots.ocr), a vision-language model for document OCR, powered by [vLLM](https://github.com/vllm-project/vllm). Exposes an OpenAI-compatible API for extracting text from images and PDFs.
 
+Upload an image or PDF, and the model returns the text it contains — useful for digitizing scanned documents, invoices, receipts, and any printed or handwritten text. Works on GPU (fast) or CPU-only (slower). Includes a management script and a standalone tool for batch PDF processing.
+
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose v2
@@ -87,7 +89,7 @@ curl -s http://localhost:8000/v1/chat/completions \
 
 ### PDF Processing
 
-Use `pdf-ocr.sh` to extract text from PDF documents (requires `poppler-utils`):
+A standalone script that converts each PDF page to an image (`pdftoppm`), sends it to the OCR API, and outputs the extracted text. Also works directly with image files. Requires `poppler-utils`.
 
 ```bash
 # OCR all pages of a PDF
