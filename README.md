@@ -15,8 +15,8 @@ A Docker setup for running [dots.ocr](https://github.com/rednote-hilab/dots.ocr)
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/manzolo/dots.ocr.git
-cd dots.ocr
+git clone https://github.com/manzolo/dots.ocr-docker.git
+cd dots.ocr-docker
 ```
 
 2. Copy the example env for your hardware:
